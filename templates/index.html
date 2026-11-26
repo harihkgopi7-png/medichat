@@ -1,52 +1,28 @@
-<script>
 const $ = id => document.getElementById(id);
+
+const store = {
+    get(k) {
+        try {
+            return localStorage.getItem(k);
+        } catch (e) {
+            return null;
+        }
+    },
+    set(k, v) {
+        try {
+            localStorage.setItem(k, v);
+        } catch (e) {}
+    }
+};
 
 let current = [];
 let bill = [];
-
-/* ---------- Storage (declare before using it) ---------- */
-const store = {
-  get(k) {
-    try {
-      return localStorage.getItem(k);
-    } catch (e) {
-      return null;
-    }
-  },
-  set(k, v) {
-    try {
-      localStorage.setItem(k, v);
-    } catch (e) {}
-  }
-};
-const $ = id => document.getElementById(id);
-
-let current = [];
-let bill = [];
-
-/* Storage helpers */
-const store = {
-  get(k) {
-    try {
-      return localStorage.getItem(k);
-    } catch (e) {
-      return null;
-    }
-  },
-  set(k, v) {
-    try {
-      localStorage.setItem(k, v);
-    } catch (e) {}
-  }
-};
-
-/* Saved prices */
 let savedPrices = {};
 
 try {
-  savedPrices = JSON.parse(store.get("prices") || "{}");
+    savedPrices = JSON.parse(store.get("prices") || "{}");
 } catch (e) {
-  savedPrices = {};
+    savedPrices = {};
 }
 
 /* ---------- Icons ---------- */

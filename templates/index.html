@@ -1,466 +1,553 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Medichat | Medicine information and billing</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Source+Serif+4:wght@600;700&display=swap" rel="stylesheet">
-  <style>
-    :root {
-      --bg: #f4f7f9;
-      --surface: #ffffff;
-      --ink: #0f2a3d;
-      --muted: #566b7a;
-      --line: #d7e1e8;
-      --brand: #0a6e78;
-      --brand-ink: #ffffff;
-      --brand-soft: #e3f2f4;
-      --notice-bg: #fff6e8;
-      --notice-line: #f0c987;
-      --notice-ink: #6b4300;
-      --danger: #b3261e;
+<script>
+const $ = id => document.getElementById(id);
+
+let current = [];
+let bill = [];
+
+/* ---------- Storage (declare before using it) ---------- */
+const store = {
+  get(k) {
+    try {
+      return localStorage.getItem(k);
+    } catch (e) {
+      return null;
     }
-    :root[data-theme="dark"] {
-      --bg: #0b1721;
-      --surface: #12232f;
-      --ink: #e6eef3;
-      --muted: #94aab8;
-      --line: #26404f;
-      --brand: #4fc3cd;
-      --brand-ink: #062a30;
-      --brand-soft: #173843;
-      --notice-bg: #2c2112;
-      --notice-line: #6b4f1f;
-      --notice-ink: #f1cf94;
-      --danger: #ff8a80;
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0; background: var(--bg); color: var(--ink);
-      font-family: "Atkinson Hyperlegible", Arial, sans-serif;
-      font-size: 17px; line-height: 1.55;
-      transition: background .2s, color .2s;
-    }
-    svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2;
-          stroke-linecap: round; stroke-linejoin: round; flex: none; }
+  },
+  set(k, v) {
+    try {
+      localStorage.setItem(k, v);
+    } catch (e) {}
+  }
+};
 
-    /* Top bar */
-    .topbar { background: var(--surface); border-bottom: 1px solid var(--line); }
-    .topbar-in { max-width: 760px; margin: 0 auto; padding: 12px 16px;
-                 display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-    .brand { display: flex; align-items: center; gap: 10px; }
-    .logo { width: 36px; height: 36px; border-radius: 9px; background: var(--brand); color: var(--brand-ink);
-            display: grid; place-items: center; }
-    .logo svg { width: 22px; height: 22px; stroke-width: 2.6; }
-    .brand-name { font-family: "Source Serif 4", Georgia, serif; font-weight: 700; font-size: 22px; letter-spacing: .2px; }
+let savedPrices = {};
+try {
+  savedPrices = JSON.parse(store.get("prices") || "{}");
+} catch (e) {
+  savedPrices = {};
+}
 
-    button { font: inherit; cursor: pointer; border-radius: 8px; border: 1px solid transparent;
-             display: inline-flex; align-items: center; gap: 8px; }
-    button:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid var(--brand); outline-offset: 2px; }
-    .theme-btn { background: transparent; color: var(--ink); border-color: var(--line); padding: 8px 12px; font-size: 15px; }
-    .theme-btn:hover { background: var(--brand-soft); }
+/* ---------- Icons ---------- */
+const ICON = {
+  sun: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
+  moon: '<svg viewBox="0 0 24 24"><path d="M21 13A9 9 0 1 1 11 3a7 7 0 0 0 10 10z"/></svg>',
+  speaker: '<svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4zM16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></svg>',
+  plus: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
+  x: '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>'
+};
 
-    /* Page */
-    main { max-width: 760px; margin: 0 auto; padding: 32px 16px 24px; }
-    h1 { font-family: "Source Serif 4", Georgia, serif; font-size: 32px; line-height: 1.2; margin: 0 0 8px; }
-    .lead { color: var(--muted); margin: 0 0 22px; max-width: 56ch; }
+/* ---------- Helpers ---------- */
+const hasData = v =>
+  v !== null &&
+  v !== undefined &&
+  String(v).trim() !== "" &&
+  !String(v).includes("PDF-la");
 
-    .searchbar { display: flex; gap: 8px; }
-    .field { flex: 1; min-width: 0; position: relative; }
-    .field svg { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--muted); }
-    .search-input { width: 100%; padding: 14px 14px 14px 44px; font: inherit; color: var(--ink);
-            background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
-    input::placeholder { color: var(--muted); }
-    .btn-primary { background: var(--brand); color: var(--brand-ink); font-weight: 700; padding: 10px 20px; }
-    .btn-primary:hover { filter: brightness(1.08); }
-    .btn-icon { background: var(--surface); color: var(--ink); border-color: var(--line); padding: 0 14px; }
-    .btn-icon:hover { background: var(--brand-soft); }
-    .btn-icon.listening { background: var(--danger); color: #fff; border-color: var(--danger); }
-    .searchbar .btn-primary { padding: 0 20px; }
+const esc = s =>
+  String(s ?? "").replace(/[&<>"']/g, c => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
+  }[c]));
 
-    .status { min-height: 1.6em; margin: 10px 2px 0; color: var(--muted); font-size: 15px; }
+const priceLink = m =>
+  "https://www.google.com/search?q=" +
+  encodeURIComponent(m.name + " " + (m.generic || "") + " tablet price India");
 
-    /* Results */
-    .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
-            margin-top: 14px; overflow: hidden; }
-    .card-head { padding: 14px 18px; border-bottom: 1px solid var(--line);
-                 display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-    .card-head h3 { margin: 0; font-family: "Source Serif 4", Georgia, serif; font-size: 22px; }
-    .generic { color: var(--brand); font-weight: 700; font-size: 15px; background: var(--brand-soft);
-               padding: 3px 10px; border-radius: 999px; }
-    dl { margin: 0; padding: 4px 18px; }
-    .row { display: grid; grid-template-columns: 130px 1fr; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
-    .row:last-child { border-bottom: 0; }
-    dt { color: var(--muted); font-size: 15px; }
-    dd { margin: 0; }
-    dd a { color: var(--brand); }
-    .card-foot { padding: 10px 18px 14px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-    .speak { background: var(--brand-soft); color: var(--ink); border-color: var(--line); padding: 8px 14px; font-size: 15px; }
-    .speak:hover { border-color: var(--brand); }
-    .add-bill { padding: 8px 14px; font-size: 15px; font-weight: 700; }
-    .foot-note { color: var(--muted); font-size: 14px; flex-basis: 100%; }
+const money = n => "₹" + (Number(n) || 0).toFixed(2);
 
-    /* Bill */
-    .bill { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; margin-top: 32px; }
-    .bill-head { padding: 16px 18px; border-bottom: 1px solid var(--line); }
-    .bill-head h2 { font-family: "Source Serif 4", Georgia, serif; font-size: 24px; margin: 0 0 12px; }
-    .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; }
-    .meta label { display: block; color: var(--muted); font-size: 14px; }
-    .meta input { width: 100%; padding: 8px 10px; font: inherit; color: var(--ink);
-                  background: var(--bg); border: 1px solid var(--line); border-radius: 8px; }
-    .meta .fixed { padding: 8px 0; }
-    .table-wrap { overflow-x: auto; padding: 0 18px; }
-    table { width: 100%; border-collapse: collapse; margin: 8px 0; }
-    th, td { text-align: left; padding: 10px 6px; border-bottom: 1px solid var(--line); vertical-align: middle; }
-    th { color: var(--muted); font-size: 14px; font-weight: 400; }
-    td.num, th.num { text-align: right; }
-    td small { color: var(--muted); display: block; }
-    .qty, .unit { width: 76px; padding: 6px 8px; font: inherit; color: var(--ink); text-align: right;
-                  background: var(--bg); border: 1px solid var(--line); border-radius: 6px; }
-    .unit { width: 92px; }
-    .rm { background: transparent; color: var(--muted); border-color: transparent; padding: 4px; }
-    .rm:hover { color: var(--danger); }
-    .empty { padding: 22px 18px; color: var(--muted); }
-    .total-row { display: flex; justify-content: space-between; align-items: baseline; padding: 14px 18px;
-                 font-size: 20px; font-weight: 700; }
-    .bill-actions { display: flex; gap: 10px; padding: 0 18px 18px; flex-wrap: wrap; }
-    .btn-ghost { background: transparent; color: var(--ink); border-color: var(--line); padding: 10px 16px; }
-    .btn-ghost:hover { background: var(--brand-soft); }
-    .bill-foot { display: none; padding: 0 18px 18px; color: var(--muted); font-size: 14px; }
-
-    /* Notice + footer */
-    .notice { margin-top: 28px; background: var(--notice-bg); color: var(--notice-ink);
-              border: 1px solid var(--notice-line); border-radius: 10px; padding: 12px 14px;
-              display: flex; gap: 10px; font-size: 15px; }
-    .notice svg { margin-top: 2px; }
-    footer { max-width: 760px; margin: 0 auto; padding: 8px 16px 40px; color: var(--muted); font-size: 14px; }
-    footer p { margin: 4px 0; }
-
-    @media (max-width: 520px) {
-      h1 { font-size: 26px; }
-      .row { grid-template-columns: 1fr; gap: 2px; }
-      .btn-primary span.label { display: none; }
-      .searchbar .btn-primary { padding: 0 14px; }
-      .meta { grid-template-columns: 1fr; }
-    }
-    @media (prefers-reduced-motion: reduce) { body { transition: none; } }
-
-    /* Printing: show only the bill */
-    @media print {
-      :root, :root[data-theme="dark"] { --bg: #fff; --surface: #fff; --ink: #000; --muted: #444; --line: #bbb; }
-      body { background: #fff; color: #000; font-size: 14px; }
-      .topbar, main > h1, .lead, .searchbar, .status, #result, .notice, footer,
-      .bill-actions, .no-print { display: none !important; }
-      main { padding: 0; max-width: none; }
-      .bill { border: 0; margin: 0; }
-      .meta input { border: 0; background: none; padding: 0; }
-      .meta input::placeholder { color: transparent; }
-      .qty, .unit { border: 0; background: none; padding: 0; width: auto; }
-      .bill-foot { display: block; }
-    }
-  </style>
-</head>
-<body>
-  <div class="topbar">
-    <div class="topbar-in">
-      <div class="brand">
-        <div class="logo" aria-hidden="true">
-          <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
-        </div>
-        <span class="brand-name">Medichat</span>
-      </div>
-      <button id="themeBtn" class="theme-btn" aria-label="Switch dark or light mode"></button>
-    </div>
-  </div>
-
-  <main>
-    <h1>Medicine information, simply explained</h1>
-    <p class="lead">Search 75 common medicines by brand name, generic name or purpose, then add them to a bill.</p>
-
-    <div class="searchbar">
-      <div class="field">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
-        <input id="q" class="search-input" placeholder="Try Dolo, Metformin or fever" aria-label="Search medicine" autocomplete="off">
-      </div>
-      <button id="micBtn" class="btn-icon" aria-label="Search by voice" title="Voice search">
-        <svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
-      </button>
-      <button id="goBtn" class="btn-primary" aria-label="Search">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
-        <span class="label">Search</span>
-      </button>
-    </div>
-    <div id="status" class="status" role="status"></div>
-    <div id="result"></div>
-
-    <!-- BILL -->
-    <section class="bill" id="billArea" aria-label="Bill">
-      <div class="bill-head">
-        <h2>Bill</h2>
-        <div class="meta">
-          <div>
-            <label for="shopName">Shop name</label>
-            <input id="shopName" placeholder="Your shop name">
-          </div>
-          <div>
-            <label for="custName">Customer name</label>
-            <input id="custName" placeholder="Customer name">
-          </div>
-          <div>
-            <label>Bill no.</label>
-            <div class="fixed" id="billNo"></div>
-          </div>
-          <div>
-            <label>Date</label>
-            <div class="fixed" id="billDate"></div>
-          </div>
-        </div>
-      </div>
-      <div id="billBody"></div>
-      <div class="bill-actions">
-        <button id="printBtn" class="btn-primary">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9V3h12v6M6 18H4v-7h16v7h-2M7 14h10v7H7z"/></svg>
-          <span>Print bill</span>
-        </button>
-        <button id="clearBtn" class="btn-ghost">Clear bill</button>
-      </div>
-      <div class="bill-foot">Thank you. Please consult a doctor or pharmacist before using any medicine.</div>
-    </section>
-
-    <div class="notice" role="note">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.5"/></svg>
-      <div>
-        This site gives general information only. Please consult a doctor or pharmacist before taking any medicine.
-        Idhu information-ku mattum. Doctor / pharmacist-a consult pannama medicine edukka vendaam.
-      </div>
-    </div>
-  </main>
-
-  <footer>
-    <p>Medichat is an educational project. The information is compiled from college reference material and is not a substitute for professional medical advice.</p>
-    <p>Prices on the bill are the ones you enter. This is a simple bill and not a tax invoice.</p>
-  </footer>
-
-  <script>
-    const $ = id => document.getElementById(id);
-    let current = [];
-    let bill = [];
-    let savedPrices = {};
-    try { savedPrices = JSON.parse(store.get("prices") || "{}"); } catch (e) { savedPrices = {}; }
-
-    const ICON = {
-      sun: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
-      moon: '<svg viewBox="0 0 24 24"><path d="M21 13A9 9 0 1 1 11 3a7 7 0 0 0 10 10z"/></svg>',
-      speaker: '<svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4zM16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></svg>',
-      plus: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
-      x: '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>'
-    };
-
-    /* ---------- Storage helpers (safe if blocked) ---------- */
-    const store = {
-      get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
-      set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
-    };
-
-    /* ---------- Dark / light theme ---------- */
-    function applyTheme(t) {
-      document.documentElement.dataset.theme = t;
-      $("themeBtn").innerHTML = t === "dark"
-        ? ICON.sun + "<span>Light mode</span>"
-        : ICON.moon + "<span>Dark mode</span>";
-    }
-    applyTheme(store.get("theme") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
-    $("themeBtn").onclick = () => {
-      const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
-      applyTheme(next);
-      store.set("theme", next);
-    };
-
-    /* ---------- Helpers ---------- */
-    const hasData = v => v && !v.includes("PDF-la");
-    const esc = s => String(s).replace(/[&<>"']/g, c => (
-      { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-    const priceLink = m => "https://www.google.com/search?q=" +
-      encodeURIComponent(m.name + " " + m.generic + " tablet price India");
-    const money = n => "₹" + (Number(n) || 0).toFixed(2);
-    // Take the first number from text like "₹30 for 15 tablets"
-    const parsePrice = v => {
+const parsePrice = v => {
   if (!hasData(v)) return 0;
   const m = String(v).replace(/,/g, "").match(/\d+(\.\d+)?/);
   return m ? parseFloat(m[0]) : 0;
 };
-    
 
-    /* ---------- Search ---------- */
-    async function search() {
-      const q = $("q").value.trim();
-      const box = $("result");
-      if (!q) { box.innerHTML = ""; $("status").textContent = "Type a medicine name to search."; return; }
-      $("status").textContent = "";
-      try {
-        const res = await fetch("/search?q=" + encodeURIComponent(q));
-        current = await res.json();
-        if (current.length === 0) { box.innerHTML = ""; $("status").textContent = "No medicine found. Try another spelling."; return; }
-        $("status").textContent = current.length + (current.length === 1 ? " result" : " results");
-        box.innerHTML = current.map((m, i) => `
-          <article class="card">
-            <div class="card-head">
-              <h3>${esc(m.name)}</h3>
-              <span class="generic">${esc(m.generic)}</span>
-            </div>
-            <dl>
-              <div class="row"><dt>Used for</dt><dd>${esc(m.purpose)}</dd></div>
-              ${hasData(m.age) ? `<div class="row"><dt>Age note</dt><dd>${esc(m.age)}</dd></div>` : ""}
-              ${hasData(m.dosage) ? `<div class="row"><dt>Dosage</dt><dd>${esc(m.dosage)}</dd></div>` : ""}
-              <div class="row"><dt>Price</dt><dd>${savedPrices[m.name] !== undefined ? money(savedPrices[m.name]) : hasData(m.price)
-                ? esc(m.price)
-                : `<a href="${priceLink(m)}" target="_blank" rel="noopener">Check current price online</a>`}</dd></div>
-            </dl>
-            <div class="card-foot">
-              <button class="btn-primary add-bill" data-i="${i}">${ICON.plus}<span>Add to bill</span></button>
-              <button class="speak" data-i="${i}">${ICON.speaker}<span>Read aloud</span></button>
-              <span class="foot-note">Ask a doctor or pharmacist about dosage and age.</span>
-            </div>
-          </article>`).join("");
-      } catch (e) {
-        box.innerHTML = "";
-        $("status").textContent = "Could not reach the server. Check that app.py is running.";
-      }
-    }
-    $("goBtn").onclick = search;
-    $("q").addEventListener("keydown", e => { if (e.key === "Enter") search(); });
+/* ---------- Dark / Light Theme ---------- */
+function applyTheme(t) {
+  document.documentElement.dataset.theme = t;
 
-    /* ---------- Card buttons: add to bill, read aloud ---------- */
-    $("result").addEventListener("click", e => {
-      const add = e.target.closest(".add-bill");
-      if (add) {
-        const m = current[add.dataset.i];
-        const found = bill.find(b => b.name === m.name);
-        if (found) found.qty += 1;
-        else bill.push({ name: m.name, generic: m.generic, qty: 1, price: savedPrices[m.name] ?? parsePrice(m.price) });
-        saveBill(); renderBill();
-        $("status").textContent = m.name + " added to bill.";
-        return;
-      }
-      const btn = e.target.closest(".speak");
-      if (!btn) return;
-      if (!("speechSynthesis" in window)) { $("status").textContent = "Read aloud is not supported in this browser."; return; }
-      const m = current[btn.dataset.i];
-      let text = `${m.name}. Generic name: ${m.generic}. Used for: ${m.purpose}.`;
-      if (hasData(m.price)) text += ` Price: ${m.price}.`;
-      text += " Please ask a doctor or pharmacist before use.";
-      speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(text);
-      u.lang = "en-IN";
-      speechSynthesis.speak(u);
-    });
-
-    /* ---------- Bill ---------- */
-    function newBillNo() {
-      const d = new Date(), p = n => String(n).padStart(2, "0");
-      return "MC-" + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + "-" + p(d.getHours()) + p(d.getMinutes());
-    }
-    function setHeader() {
-      $("billNo").textContent = store.get("billNo") || newBillNo();
-      $("billDate").textContent = new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
-    }
-    function saveBill() {
-      store.set("bill", JSON.stringify(bill));
-      if (!store.get("billNo")) store.set("billNo", newBillNo());
-      setHeader();
-    }
-    function total() { return bill.reduce((s, b) => s + b.qty * b.price, 0); }
-
-    function renderBill() {
-      const body = $("billBody");
-      if (bill.length === 0) {
-        body.innerHTML = '<div class="empty">No items yet. Search a medicine and tap Add to bill.</div>';
-        return;
-      }
-      body.innerHTML = `
-        <div class="table-wrap"><table>
-          <thead><tr>
-            <th>Medicine</th><th class="num">Qty</th><th class="num">Price (₹)</th><th class="num">Amount</th><th class="no-print"></th>
-          </tr></thead>
-          <tbody>
-            ${bill.map((b, i) => `
-              <tr data-i="${i}">
-                <td>${esc(b.name)}<small>${esc(b.generic)}</small></td>
-                <td class="num"><input class="qty" type="number" min="1" step="1" value="${b.qty}" aria-label="Quantity for ${esc(b.name)}"></td>
-                <td class="num"><input class="unit" type="number" min="0" step="0.01" value="${b.price}" aria-label="Price for ${esc(b.name)}"></td>
-                <td class="num amt">${money(b.qty * b.price)}</td>
-                <td class="no-print"><button class="rm" aria-label="Remove ${esc(b.name)}">${ICON.x}</button></td>
-              </tr>`).join("")}
-          </tbody>
-        </table></div>
-        <div class="total-row"><span>Total</span><span id="grand">${money(total())}</span></div>`;
-    }
-
-    // Edit quantity or price without re-drawing (keeps the cursor in the box)
-    $("billBody").addEventListener("input", e => {
-      const tr = e.target.closest("tr");
-      if (!tr) return;
-      const b = bill[tr.dataset.i];
-      if (e.target.classList.contains("qty")) b.qty = Math.max(1, parseInt(e.target.value) || 1);
-      if (e.target.classList.contains("unit")) {
-  b.price = Math.max(0, parseFloat(e.target.value) || 0);
-  savedPrices[b.name] = b.price;
-  store.set("prices", JSON.stringify(savedPrices));
+  $("themeBtn").innerHTML = t === "dark"
+    ? ICON.sun + "<span>Light mode</span>"
+    : ICON.moon + "<span>Dark mode</span>";
 }
-      tr.querySelector(".amt").textContent = money(b.qty * b.price);
-      $("grand").textContent = money(total());
-      saveBill();
-    });
-    $("billBody").addEventListener("click", e => {
-      const rm = e.target.closest(".rm");
-      if (!rm) return;
-      bill.splice(rm.closest("tr").dataset.i, 1);
-      saveBill(); renderBill();
-    });
 
-    $("clearBtn").onclick = () => {
-      if (bill.length && !confirm("Clear all items from this bill?")) return;
-      bill = [];
-      store.set("bill", "[]");
-      store.set("billNo", newBillNo());
-      $("custName").value = "";
-      store.set("custName", "");
-      setHeader(); renderBill();
-    };
-    $("printBtn").onclick = () => {
-      if (bill.length === 0) { $("status").textContent = "Add at least one medicine before printing."; return; }
-      window.print();
-    };
+applyTheme(
+  store.get("theme") ||
+  (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
+);
 
-    $("shopName").value = store.get("shopName") || "";
-    $("custName").value = store.get("custName") || "";
-    $("shopName").addEventListener("input", e => store.set("shopName", e.target.value));
-    $("custName").addEventListener("input", e => store.set("custName", e.target.value));
+$("themeBtn").onclick = () => {
+  const next =
+    document.documentElement.dataset.theme === "dark"
+      ? "light"
+      : "dark";
 
-    try { bill = JSON.parse(store.get("bill") || "[]"); } catch (e) { bill = []; }
-    setHeader(); renderBill();
+  applyTheme(next);
+  store.set("theme", next);
+};
 
-    /* ---------- Voice search ---------- */
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) {
-      $("micBtn").style.display = "none";
-    } else {
-      const rec = new SR();
-      rec.lang = "en-IN";
-      rec.interimResults = false;
-      rec.onstart = () => { $("micBtn").classList.add("listening"); $("status").textContent = "Listening. Say a medicine name."; };
-      rec.onend = () => $("micBtn").classList.remove("listening");
-      rec.onerror = e => { $("status").textContent = e.error === "not-allowed"
-        ? "Microphone access is blocked. Allow the microphone in the address bar."
-        : "Could not understand. Please try again."; };
-      rec.onresult = e => {
-        $("q").value = e.results[0][0].transcript.replace(/[.,]$/, "");
-        search();
-      };
-      $("micBtn").onclick = () => { try { rec.start(); } catch (err) { rec.stop(); } };
+/* ---------- Medicine Search ---------- */
+async function search() {
+  const q = $("q").value.trim();
+  const box = $("result");
+
+  if (!q) {
+    box.innerHTML = "";
+    $("status").textContent = "Type a medicine name to search.";
+    return;
+  }
+
+  $("status").textContent = "Searching...";
+
+  try {
+    const res = await fetch("/search?q=" + encodeURIComponent(q));
+
+    if (!res.ok) {
+      throw new Error("Search request failed");
     }
-  </script>
-</body>
-</html>
+
+    current = await res.json();
+
+    if (!Array.isArray(current) || current.length === 0) {
+      box.innerHTML = "";
+      $("status").textContent =
+        "No medicine found. Try another spelling.";
+      return;
+    }
+
+    $("status").textContent =
+      current.length +
+      (current.length === 1 ? " result" : " results");
+
+    box.innerHTML = current.map((m, i) => `
+      <article class="card">
+
+        <div class="card-head">
+          <h3>${esc(m.name)}</h3>
+          <span class="generic">${esc(m.generic)}</span>
+        </div>
+
+        <dl>
+
+          <div class="row">
+            <dt>Used for</dt>
+            <dd>${esc(m.purpose)}</dd>
+          </div>
+
+          ${hasData(m.age) ? `
+            <div class="row">
+              <dt>Age note</dt>
+              <dd>${esc(m.age)}</dd>
+            </div>
+          ` : ""}
+
+          ${hasData(m.dosage) ? `
+            <div class="row">
+              <dt>Dosage</dt>
+              <dd>${esc(m.dosage)}</dd>
+            </div>
+          ` : ""}
+
+          <div class="row">
+            <dt>Price</dt>
+            <dd>
+              ${
+                savedPrices[m.name] !== undefined
+                  ? money(savedPrices[m.name])
+                  : hasData(m.price)
+                    ? esc(m.price)
+                    : `<a href="${priceLink(m)}"
+                         target="_blank"
+                         rel="noopener">
+                         Check current price online
+                       </a>`
+              }
+            </dd>
+          </div>
+
+        </dl>
+
+        <div class="card-foot">
+
+          <button class="btn-primary add-bill" data-i="${i}">
+            ${ICON.plus}
+            <span>Add to bill</span>
+          </button>
+
+          <button class="speak" data-i="${i}">
+            ${ICON.speaker}
+            <span>Read aloud</span>
+          </button>
+
+          <span class="foot-note">
+            Ask a doctor or pharmacist about dosage and age.
+          </span>
+
+        </div>
+      </article>
+    `).join("");
+
+  } catch (e) {
+    box.innerHTML = "";
+    $("status").textContent =
+      "Could not reach the server. Check that app.py is running.";
+  }
+}
+
+$("goBtn").onclick = search;
+
+$("q").addEventListener("keydown", e => {
+  if (e.key === "Enter") search();
+});
+
+/* ---------- Add to Bill and Read Aloud ---------- */
+$("result").addEventListener("click", e => {
+
+  const add = e.target.closest(".add-bill");
+
+  if (add) {
+    const m = current[Number(add.dataset.i)];
+
+    if (!m) return;
+
+    const found = bill.find(b => b.name === m.name);
+
+    if (found) {
+      found.qty += 1;
+    } else {
+      bill.push({
+        name: m.name,
+        generic: m.generic,
+        qty: 1,
+        price: savedPrices[m.name] ?? parsePrice(m.price)
+      });
+    }
+
+    saveBill();
+    renderBill();
+
+    $("status").textContent = m.name + " added to bill.";
+    return;
+  }
+
+  const btn = e.target.closest(".speak");
+
+  if (!btn) return;
+
+  if (!("speechSynthesis" in window)) {
+    $("status").textContent =
+      "Read aloud is not supported in this browser.";
+    return;
+  }
+
+  const m = current[Number(btn.dataset.i)];
+
+  if (!m) return;
+
+  let text =
+    `${m.name}. Generic name: ${m.generic}. Used for: ${m.purpose}.`;
+
+  if (hasData(m.price)) {
+    text += ` Price: ${m.price}.`;
+  }
+
+  text += " Please ask a doctor or pharmacist before use.";
+
+  speechSynthesis.cancel();
+
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = "en-IN";
+
+  speechSynthesis.speak(u);
+});
+
+/* ---------- Bill Number ---------- */
+function newBillNo() {
+  const d = new Date();
+  const p = n => String(n).padStart(2, "0");
+
+  return "MC-" +
+    d.getFullYear() +
+    p(d.getMonth() + 1) +
+    p(d.getDate()) + "-" +
+    p(d.getHours()) +
+    p(d.getMinutes());
+}
+
+function setHeader() {
+  $("billNo").textContent =
+    store.get("billNo") || newBillNo();
+
+  $("billDate").textContent =
+    new Date().toLocaleDateString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric"
+    });
+}
+
+/* ---------- Save Bill ---------- */
+function saveBill() {
+  store.set("bill", JSON.stringify(bill));
+
+  if (!store.get("billNo")) {
+    store.set("billNo", newBillNo());
+  }
+
+  setHeader();
+}
+
+function total() {
+  return bill.reduce(
+    (s, b) => s + b.qty * b.price,
+    0
+  );
+}
+
+/* ---------- Display Bill ---------- */
+function renderBill() {
+  const body = $("billBody");
+
+  if (bill.length === 0) {
+    body.innerHTML =
+      '<div class="empty">No items yet. Search a medicine and tap Add to bill.</div>';
+    return;
+  }
+
+  body.innerHTML = `
+    <div class="table-wrap">
+      <table>
+
+        <thead>
+          <tr>
+            <th>Medicine</th>
+            <th class="num">Qty</th>
+            <th class="num">Price (₹)</th>
+            <th class="num">Amount</th>
+            <th class="no-print"></th>
+          </tr>
+        </thead>
+
+        <tbody>
+          ${bill.map((b, i) => `
+            <tr data-i="${i}">
+
+              <td>
+                ${esc(b.name)}
+                <small>${esc(b.generic)}</small>
+              </td>
+
+              <td class="num">
+                <input
+                  class="qty"
+                  type="number"
+                  min="1"
+                  step="1"
+                  value="${b.qty}"
+                  aria-label="Quantity for ${esc(b.name)}"
+                >
+              </td>
+
+              <td class="num">
+                <input
+                  class="unit"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value="${b.price}"
+                  aria-label="Price for ${esc(b.name)}"
+                >
+              </td>
+
+              <td class="num amt">
+                ${money(b.qty * b.price)}
+              </td>
+
+              <td class="no-print">
+                <button class="rm"
+                  aria-label="Remove ${esc(b.name)}">
+                  ${ICON.x}
+                </button>
+              </td>
+
+            </tr>
+          `).join("")}
+        </tbody>
+
+      </table>
+    </div>
+
+    <div class="total-row">
+      <span>Total</span>
+      <span id="grand">${money(total())}</span>
+    </div>
+  `;
+}
+
+/* ---------- Edit Quantity and Price ---------- */
+$("billBody").addEventListener("input", e => {
+
+  const tr = e.target.closest("tr");
+
+  if (!tr) return;
+
+  const b = bill[Number(tr.dataset.i)];
+
+  if (!b) return;
+
+  if (e.target.classList.contains("qty")) {
+    b.qty = Math.max(
+      1,
+      parseInt(e.target.value, 10) || 1
+    );
+  }
+
+  if (e.target.classList.contains("unit")) {
+    b.price = Math.max(
+      0,
+      parseFloat(e.target.value) || 0
+    );
+
+    savedPrices[b.name] = b.price;
+
+    store.set("prices", JSON.stringify(savedPrices));
+  }
+
+  tr.querySelector(".amt").textContent =
+    money(b.qty * b.price);
+
+  $("grand").textContent = money(total());
+
+  saveBill();
+});
+
+/* ---------- Remove Medicine ---------- */
+$("billBody").addEventListener("click", e => {
+
+  const rm = e.target.closest(".rm");
+
+  if (!rm) return;
+
+  const tr = rm.closest("tr");
+
+  bill.splice(Number(tr.dataset.i), 1);
+
+  saveBill();
+  renderBill();
+});
+
+/* ---------- Clear Bill ---------- */
+$("clearBtn").onclick = () => {
+
+  if (
+    bill.length &&
+    !confirm("Clear all items from this bill?")
+  ) {
+    return;
+  }
+
+  bill = [];
+
+  store.set("bill", "[]");
+  store.set("billNo", newBillNo());
+
+  $("custName").value = "";
+  store.set("custName", "");
+
+  setHeader();
+  renderBill();
+};
+
+/* ---------- Print Bill ---------- */
+$("printBtn").onclick = () => {
+
+  if (bill.length === 0) {
+    $("status").textContent =
+      "Add at least one medicine before printing.";
+    return;
+  }
+
+  window.print();
+};
+
+/* ---------- Shop and Customer Details ---------- */
+$("shopName").value =
+  store.get("shopName") || "";
+
+$("custName").value =
+  store.get("custName") || "";
+
+$("shopName").addEventListener("input", e => {
+  store.set("shopName", e.target.value);
+});
+
+$("custName").addEventListener("input", e => {
+  store.set("custName", e.target.value);
+});
+
+/* ---------- Load Previous Bill ---------- */
+try {
+  bill = JSON.parse(store.get("bill") || "[]");
+
+  if (!Array.isArray(bill)) {
+    bill = [];
+  }
+} catch (e) {
+  bill = [];
+}
+
+setHeader();
+renderBill();
+
+/* ---------- Voice Search ---------- */
+const SR =
+  window.SpeechRecognition ||
+  window.webkitSpeechRecognition;
+
+if (!SR) {
+
+  $("micBtn").style.display = "none";
+
+} else {
+
+  const rec = new SR();
+
+  rec.lang = "en-IN";
+  rec.interimResults = false;
+
+  rec.onstart = () => {
+    $("micBtn").classList.add("listening");
+    $("status").textContent =
+      "Listening. Say a medicine name.";
+  };
+
+  rec.onend = () => {
+    $("micBtn").classList.remove("listening");
+  };
+
+  rec.onerror = e => {
+    $("status").textContent =
+      e.error === "not-allowed"
+        ? "Microphone access is blocked. Allow microphone access."
+        : "Could not understand. Please try again.";
+  };
+
+  rec.onresult = e => {
+    $("q").value =
+      e.results[0][0].transcript.replace(/[.,]$/, "");
+
+    search();
+  };
+
+  $("micBtn").onclick = () => {
+    try {
+      rec.start();
+    } catch (err) {
+      $("status").textContent =
+        "Voice search is already active. Please try again.";
+    }
+  };
+}
+</script>
